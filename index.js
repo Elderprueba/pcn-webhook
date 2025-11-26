@@ -31,3 +31,29 @@ app.post("/webhook", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor activo en puerto: ${PORT}`));
+
+app.post("/webhook", (req, res) => {
+  console.log("BODY RECIBIDO DESDE DIALOGFLOW:", req.body);
+
+  try {
+    const { vmi, md, mo, ci } = req.body.queryResult.parameters;
+
+    console.log("Valores recibidos:", vmi, md, mo, ci);
+
+    const resultado = (vmi * md * mo * ci) / 10000;
+
+    if (!resultado || isNaN(resultado)) {
+      throw new Error("Valores inválidos en parámetros");
+    }
+
+    return res.json({
+      fulfillmentText: `El resultado del PCN es: ${resultado}`
+    });
+
+  } catch (error) {
+    console.error("Error en cálculo:", error.message);
+    return res.json({
+      fulfillmentText: "Ocurrió un error calculando el PCN. Revisa los valores enviados."
+    });
+  }
+});
