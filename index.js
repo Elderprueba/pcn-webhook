@@ -1,64 +1,88 @@
-// index.js — Webhook oficial Bot PCN
 import express from "express";
 import bodyParser from "body-parser";
-import { WebhookClient } from "dialogflow-fulfillment";
+import fetch from "node-fetch";
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.use(bodyParser.json());
 
-// ----------------------
-//  WEBHOOK ENDPOINT
-// ----------------------
-app.post("/webhook", (req, res) => {
-  const agent = new WebhookClient({ request: req, response: res });
+// TOKEN DEL BOT
+const TOKEN = process.env.TELEGRAM_TOKEN;
+const TELEGRAM_API = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
 
-  // ----------------------
-  //  INTENT: Cálculo final
-  // ----------------------
-  function calculoFinal(agent) {
-    const params = agent.parameters;
+// Memoria temporal por chat
+const sessionData = {};
 
-    // Obtenemos los valores enviados desde Dialogflow
-    const md = parseFloat(params.md);
-    const mo = parseFloat(params.mo);
-    const ci = parseFloat(params.ci);
-    const vmi = parseFloat(params.vmi);
+function sendMessage(chatId, text) {
+  return fetch(TELEGRAM_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
 
-    // Validación básica
-    if ([md, mo, ci, vmi].some(v => isNaN(v))) {
-      agent.add("Ocurrió un error leyendo los valores. Asegúrate de ingresar números válidos.");
-      return;
-    }
+app.post("/webhook", async (req, res) => {
+  console.log("📩 Datos recibidos:", JSON.stringify(req.body, null, 2));
 
-    // Fórmula PCN
-    const total = md + mo + ci;
-    const pcn = ((total - vmi) / total) * 100;
+  const message = req.body.message;
+  if (!message || !message.text) return res.sendStatus(200);
 
-    agent.add(`📊 Cálculo completado.\n\nEl Porcentaje de Contenido Nacional (PCN) es: **${pcn.toFixed(2)}%**`);
+  const chatId = message.chat.id;
+  const text = message.text.trim();
+
+  // Si no existe sesión, se inicializa
+  if (!sessionData[chatId]) {
+    sessionData[chatId] = {
+      step: 1,
+      md: null,
+      mo: null,
+      ci: null,
+      vmi: null,
+    };
+
+    await sendMessage(chatId, "Hola, iniciaré el cálculo del PCN.");
+    await sendMessage(chatId, "¿Cuál es el valor de Materiales Directos (MD)?");
+    return res.sendStatus(200);
   }
 
-  // ----------------------
-  // INTENT bienvenido desde Telegram para verificar conexión
-  // ----------------------
-  function bienvenida(agent) {
-    agent.add("Webhook funcionando correctamente desde Render 🚀\n\nEscribe 'calcular pcn' para comenzar.");
+  const data = sessionData[chatId];
+
+  switch (data.step) {
+    case 1:
+      data.md = Number(text);
+      data.step = 2;
+      await sendMessage(chatId, "Gracias. ¿Cuál es el valor de Mano de Obra (MO)?");
+      break;
+
+    case 2:
+      data.mo = Number(text);
+      data.step = 3;
+      await sendMessage(chatId, "Perfecto. ¿Cuánto corresponde a Costos Indirectos (CI)?");
+      break;
+
+    case 3:
+      data.ci = Number(text);
+      data.step = 4;
+      await sendMessage(chatId, "Bien. ¿Cuál es el valor de Materiales Importados (VMI)?");
+      break;
+
+    case 4:
+      data.vmi = Number(text);
+
+      const CN = data.md + data.mo + data.ci;
+      const PCN = (CN / (CN + data.vmi)) * 100;
+
+      await sendMessage(
+        chatId,
+        `📐 Resultado del Cálculo:\nCN = ${CN}\nPCN = ${PCN.toFixed(2)}%`
+      );
+
+      delete sessionData[chatId]; // limpia sesión
+      break;
   }
 
-  // ----------------------
-  // REGISTRO DE INTENTS
-  // ----------------------
-  let intentMap = new Map();
-  intentMap.set("Verificacion-Webhook", bienvenida);
-  intentMap.set("Calculo final", calculoFinal);
-
-  agent.handleRequest(intentMap);
+  res.sendStatus(200);
 });
 
-// ----------------------
-// INICIAR SERVIDOR
-// ----------------------
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor activo en puerto: ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Servidor activo en puerto: ${PORT}`));
