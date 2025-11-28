@@ -1,4 +1,5 @@
 import express from "express";
+import axios from "axios";
 
 const app = express();
 app.use(express.json());
@@ -29,15 +30,15 @@ app.post("/webhook", async (req, res) => {
 });
 
 // Función para enviar mensajes a Telegram
+import axios from "axios";
+
 async function enviarMensajeTelegram(chatId, texto) {
   const token = process.env.TELEGRAM_TOKEN;
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
-  return fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: texto }),
+  return axios.post(url, {
+    chat_id: chatId,
+    text: texto,
   });
 }
-
 app.listen(PORT, () => console.log(`🚀 Servidor activo en puerto: ${PORT}`));
