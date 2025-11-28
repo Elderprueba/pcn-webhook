@@ -6,7 +6,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 
-// Endpoint principal para Telegram
+// Endpoint principal para el Webhook de Telegram
 app.post("/webhook", async (req, res) => {
   console.log("📩 Actualización recibida:", JSON.stringify(req.body, null, 2));
 
@@ -16,28 +16,39 @@ app.post("/webhook", async (req, res) => {
   // Si no hay mensaje, respondemos OK silencioso
   if (!message) return res.sendStatus(200);
 
-  // Respuesta básica si el usuario no está enviando números todavía
+  // Respuesta básica cuando el texto NO es un número
   if (isNaN(message)) {
-    return enviarMensajeTelegram(
+    await enviarMensajeTelegram(
       chatId,
       "👋 Hola, estoy listo para calcular el PCN. Escribe 'calcular' para iniciar."
-    ).then(() => res.sendStatus(200));
+    );
+    return res.sendStatus(200);
   }
 
-  // Si el usuario envía un número, podemos procesarlo después
-  return enviarMensajeTelegram(chatId, "Recibí un valor numérico. Muy pronto calcularé el PCN.")
-    .then(() => res.sendStatus(200));
+  // Respuesta cuando el usuario envía un número
+  await enviarMensajeTelegram(
+    chatId,
+    "📥 Recibí un valor numérico. Muy pronto calcularé el PCN paso a paso."
+  );
+  return res.sendStatus(200);
 });
 
-// Función para enviar mensajes a Telegram
-
+// Función para enviar mensajes a Telegram usando Axios
 async function enviarMensajeTelegram(chatId, texto) {
   const token = process.env.TELEGRAM_TOKEN;
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
-  return axios.post(url, {
-    chat_id: chatId,
-    text: texto,
-  });
+  try {
+    await axios.post(url, {
+      chat_id: chatId,
+      text: texto,
+    });
+  } catch (error) {
+    console.error("❌ Error enviando mensaje a Telegram:", error.response?.data || error.message);
+  }
 }
-app.listen(PORT, () => console.log(`🚀 Servidor activo en puerto: ${PORT}`));
+
+// Servidor
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor activo en puerto: ${PORT}`);
+});
