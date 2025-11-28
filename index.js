@@ -30,7 +30,6 @@ app.post("/webhook", async (req, res) => {
 });
 
 // Función para enviar mensajes a Telegram
-import axios from "axios";
 
 async function enviarMensajeTelegram(chatId, texto) {
   const token = process.env.TELEGRAM_TOKEN;
